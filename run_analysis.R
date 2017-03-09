@@ -1,34 +1,51 @@
-if(!require("data.table")){
-  install.packages("data.table")}
-if (!require("reshape2")){
-  install.packages("reshape")
-}  
-require("data.table")
-require("reshape2")
-activity_labels <- read.table("./UCI HAR Dataset/activity_labels.txt")[,2]
-features <- read.table("./UCI HAR Dataset/features.txt")[,2]
-extract_features <- grep("mean|std", features)
-x_test <- read.table("UCI HAR Dataset/text/X_test.txt")
-y_test <- read.table("./UCI HAR Dataset/test/y_test.txt")
-subject_test <- read.table("./UCI HAR Dataset/test/subject_test")
-names(X_test) = features
-X_test = X_test[,extract_features]
-y_test[,2] = activity_labels[y_test[,1]]
-names(y_test) = c("Activity_ID", "Activity_Label")
-names(subject_test) = "subject"
-test_data <- cbind(as.data.table(subject_test), y_test, X_test)
-X_train <- read.table("./UCI HAR Dataset/train/X_train.txt")
-y_train <- read.table("./UCI HAR Dataset/train/y_train.txt")
-subject_train <- read.table("./UCI HAR Dataset/train/subject_train.txt")
-names(X_train) = features
-X_train X_train[,extract_features]
-y_train[,2] = activity_labels[y_train[,1]]
-names(y_train) = c("Activity_ID", "Activity_Label")
-names(subject_train) = "subject"
-train_data <- cbind (as.data.table(subject_train), y_train, X_train)
-data = rbind(test_data, train_data)
-id_labels = c("subject", "Activity_ID", "Activity_Label")
-data_labels = setdiff(colnames(data), id_labels)
-melt_data = melt(data, id = id_labels, measure.vars = data.labels)
-tidy_data <- dcast(melt_data, subject + Activity_Label ~ variable, mean)
-write.table(tidy_data, file = "./tidy_data.txt")
+destFile = "uci-har-dataset.zip" 
+fileUrl <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip" 
+download.file(fileUrl, destfile = destFile, method = "curl") 
+importFeaturesColumnNames <- function(filename){ 
+       df <- read.table(filename, header = FALSE, stringsAsFactors = FALSE, 
+            col.names = c("number", "name")) 
+  return(df$name) } 
+importFeatures <- function(filename, colnames){
+  df <- read.table(filename, header = FALSE, sep = "",  
+   stringsAsFactors = FALSE, col.names = colnames) 
+  df <- df[, grep("[.](mean|std)[.]", colnames(df))]
+       names(df) <- gsub("[.]", "", names(df)) 
+       names(df) <- gsub("mean", "Mean", names(df)) 
+       names(df) <- gsub("std", "Std", names(df)) 
+        
+       return(df) }
+
+importActivityLabels <- function(filename){ 
+  df <- read.table("activity_labels.txt", header = FALSE,  
+              stringsAsFactors = FALSE,  
+              col.names = c("level", "label")) 
+  return(df)}
+importActivities <- function(filename, factors){ 
+  df <- read.table(filename, header = FALSE, sep = "",  
+          stringsAsFactors = FALSE, col.names = c("activity")) 
+  df$activity <- factor(df$activity,  
+        levels = factors$level, labels = factors$label) 
+  return(df) } 
+importSubjects <- function(filename){ 
+  df <- read.table(filename, header = FALSE, sep = "",  
+     stringsAsFactors = FALSE, col.names = c("subject")) 
+   return(df) } 
+
+unzip("uci-har-dataset.zip")
+setwd("./UCI HAR Dataset")
+
+features <- importFeaturesColumnNames("features.txt") 
+features_train <- importFeatures("train/X_train.txt", features) 
+features_test <- importFeatures("test/X_test.txt", features) 
+activities <- importActivityLabels("activity_labels.txt") 
+activities_train <- importActivities("train/y_train.txt", activities) 
+activities_test <- importActivities("test/y_test.txt", activities) 
+subjects_train <- importSubjects("train/subject_train.txt") 
+subjects_test <- importSubjects("test/subject_test.txt") 
+
+train <- cbind(features_train, activities_train, subjects_train) 
+test <- cbind(features_test, activities_test, subjects_test) 
+tidy <- rbind(train, test)
+tidy_means <- with(tidy, aggregate(tidy[,1:66],  
+      by=list(activity=activity, subject=subject), FUN=mean)) 
+write.table(tidy_means, file="tidy_means.txt", row.names=FALSE)
